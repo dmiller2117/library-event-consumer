@@ -1,0 +1,28 @@
+spring:
+  profiles:
+    active: local
+  server:
+    port: 80801
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  kafka:
+    consumer:
+      bootstrap-servers:
+        bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+        key-deserializer: org.apache.kafka.common.serialization.IntegerDeserializer
+        value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+---
+spring:
+  config:
+    activate:
+      on-profile: nonprod
+  kafka:
+    consumer:
+      bootstrap-servers:
+        bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+        key-deserializer: org.apache.kafka.common.serialization.IntegerDeserializer
+        value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
