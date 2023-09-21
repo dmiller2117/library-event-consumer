@@ -19,7 +19,6 @@ public class Book {
     private String bookAuthor;
     @OneToOne
     @JoinColumn(name = "libraryEventId")
-    @ToString.Exclude
     private LibraryEvent libraryEvent;
 
 }

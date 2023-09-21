@@ -1,10 +1,7 @@
 package com.learnkafka.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @AllArgsConstructor
@@ -19,6 +16,7 @@ public class LibraryEvent {
     @Enumerated(EnumType.STRING)
     private LibraryEventType libraryEventType;
     @OneToOne(mappedBy = "libraryEvent", cascade = {CascadeType.ALL})
+    @ToString.Exclude
     private Book book;
 
 }
