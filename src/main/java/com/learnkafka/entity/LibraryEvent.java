@@ -18,7 +18,7 @@ public class LibraryEvent {
     private Integer libraryEventId;
     @Enumerated(EnumType.STRING)
     private LibraryEventType libraryEventType;
-    @OneToOne(mappedBy = "libraryEvent")
+    @OneToOne(mappedBy = "libraryEvent", cascade = {CascadeType.ALL})
     private Book book;
 
 }

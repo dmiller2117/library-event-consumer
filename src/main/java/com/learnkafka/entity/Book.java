@@ -4,10 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
 @AllArgsConstructor
@@ -22,6 +19,7 @@ public class Book {
     private String bookAuthor;
     @OneToOne
     @JoinColumn(name = "libraryEventId")
+    @ToString.Exclude
     private LibraryEvent libraryEvent;
 
 }
