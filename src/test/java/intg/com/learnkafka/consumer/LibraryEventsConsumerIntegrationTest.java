@@ -1,7 +1,10 @@
 package com.learnkafka.consumer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learnkafka.entity.Book;
 import com.learnkafka.entity.LibraryEvent;
+import com.learnkafka.entity.LibraryEventType;
 import com.learnkafka.jpa.LibraryEventsRepository;
 import com.learnkafka.service.LibraryEventsService;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -21,11 +24,13 @@ import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @SpringBootTest
 @EmbeddedKafka(topics = "library-events")
@@ -45,6 +50,8 @@ class LibraryEventsConsumerIntegrationTest {
     LibraryEventsService libraryEventsServiceSpy;
     @Autowired
     LibraryEventsRepository libraryEventsRepository;
+    @Autowired
+    ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
@@ -69,13 +76,43 @@ class LibraryEventsConsumerIntegrationTest {
 
         verify(libraryEventsConsumerSpy).onMessage(isA(ConsumerRecord.class));
         verify(libraryEventsServiceSpy).processLibraryEvent(isA(ConsumerRecord.class));
-
+        verifyNoMoreInteractions(libraryEventsConsumerSpy);
+        verifyNoMoreInteractions(libraryEventsServiceSpy);
         List<LibraryEvent> libraryEvents = (List<LibraryEvent>) libraryEventsRepository.findAll();
         assertEquals(1, libraryEvents.size());
         libraryEvents.forEach(libraryEvent -> {
             assert libraryEvent.getLibraryEventId() != null;
             assertEquals(456, libraryEvent.getBook().getBookId());
         });
+
+    }
+
+    @Test
+    void publishUpdateLibraryEvent() throws JsonProcessingException, ExecutionException, InterruptedException {
+
+        String json = "{\"libraryEventId\":null,\"libraryEventType\": \"NEW\",\"book\":{\"bookId\":456,\"bookName\":\"Kafka Using Spring Boot\",\"bookAuthor\":\"Dilip\"}}";
+        LibraryEvent libraryEvent = objectMapper.readValue(json, LibraryEvent.class);
+        libraryEvent.getBook().setLibraryEvent(libraryEvent);
+        libraryEventsRepository.save(libraryEvent);
+
+        Book updatedBook = Book.builder()
+                .bookId(456)
+                .bookName("Kafka Using Spring Boot 2.x")
+                .build();
+        libraryEvent.setLibraryEventType(LibraryEventType.UPDATE);
+        libraryEvent.setBook(updatedBook);
+        String updatedJson = objectMapper.writeValueAsString(libraryEvent);
+        kafkaTemplate.sendDefault(libraryEvent.getLibraryEventId(), updatedJson).get();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        latch.await(3, TimeUnit.SECONDS);
+
+        verify(libraryEventsConsumerSpy).onMessage(isA(ConsumerRecord.class));
+        verify(libraryEventsServiceSpy).processLibraryEvent(isA(ConsumerRecord.class));
+        verifyNoMoreInteractions(libraryEventsConsumerSpy);
+        verifyNoMoreInteractions(libraryEventsServiceSpy);
+        LibraryEvent persistedLibraryEvent = libraryEventsRepository.findById(libraryEvent.getLibraryEventId()).get();
+        assertEquals("Kafka Using Spring Boot 2.x", persistedLibraryEvent.getBook().getBookName());
 
     }
 }
