@@ -29,8 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.*;
 
 @SpringBootTest
 @EmbeddedKafka(topics = "library-events")
@@ -113,6 +112,22 @@ class LibraryEventsConsumerIntegrationTest {
         verifyNoMoreInteractions(libraryEventsServiceSpy);
         LibraryEvent persistedLibraryEvent = libraryEventsRepository.findById(libraryEvent.getLibraryEventId()).get();
         assertEquals("Kafka Using Spring Boot 2.x", persistedLibraryEvent.getBook().getBookName());
+
+    }
+
+    @Test
+    void publishUpdateLibraryEvent_null_LibraryEvent() throws JsonProcessingException, ExecutionException, InterruptedException {
+
+        String json = "{\"libraryEventId\":null,\"libraryEventType\": \"UPDATE\",\"book\":{\"bookId\":456,\"bookName\":\"Kafka Using Spring Boot\",\"bookAuthor\":\"Dilip\"}}";
+        kafkaTemplate.sendDefault(json).get();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        latch.await(5, TimeUnit.SECONDS);
+
+        verify(libraryEventsConsumerSpy, times(10)).onMessage(isA(ConsumerRecord.class));
+        verify(libraryEventsServiceSpy, times(10)).processLibraryEvent(isA(ConsumerRecord.class));
+        verifyNoMoreInteractions(libraryEventsConsumerSpy);
+        verifyNoMoreInteractions(libraryEventsServiceSpy);
 
     }
 }
