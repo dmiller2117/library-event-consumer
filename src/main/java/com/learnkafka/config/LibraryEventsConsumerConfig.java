@@ -16,6 +16,7 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.List;
@@ -36,8 +37,15 @@ public class LibraryEventsConsumerConfig {
                 RecoverableDataAccessException.class
         );
         var fixedBackOff = new FixedBackOff(1000, 2);
-        var errorHandler = new DefaultErrorHandler(fixedBackOff);
-        exceptionsToIgnoreList.forEach(errorHandler::addNotRetryableExceptions);
+        var expBackOff = new ExponentialBackOffWithMaxRetries(2);
+        expBackOff.setInitialInterval(1000l);
+        expBackOff.setMultiplier(2.0);
+        expBackOff.setMaxInterval(2000l);
+        var errorHandler = new DefaultErrorHandler(
+                //fixedBackOff
+                expBackOff
+        );
+        //exceptionsToIgnoreList.forEach(errorHandler::addNotRetryableExceptions);
         exceptionsToRetryList.forEach(errorHandler::addRetryableExceptions);
         errorHandler.setRetryListeners((record, ex, deliveryAttempt) -> {
             log.info("Failed Record in Retry Listener, Exception : {}, deliveryAttempt : {}",
