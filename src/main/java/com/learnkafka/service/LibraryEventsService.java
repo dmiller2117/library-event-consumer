@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
-import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 
 @Service
@@ -28,7 +27,7 @@ public class LibraryEventsService {
     public void processLibraryEvent(ConsumerRecord<Integer, String> consumerRecord) throws JsonProcessingException {
         LibraryEvent libraryEvent = objectMapper.readValue(consumerRecord.value(), LibraryEvent.class);
         log.info("libraryEvent :: {} ", libraryEvent);
-        if (isNull(libraryEvent) && libraryEvent.getLibraryEventId() == 999) {
+        if (nonNull(libraryEvent.getLibraryEventId()) && libraryEvent.getLibraryEventId() == 999) {
             throw new RecoverableDataAccessException("Temporary Network Issue");
         }
         switch (libraryEvent.getLibraryEventType()) {

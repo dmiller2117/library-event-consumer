@@ -45,46 +45,48 @@ public class LibraryEventsConsumerConfig {
     }
 
     public DeadLetterPublishingRecoverer publishingRecoverer() {
-
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate
-                , (r, e) -> {
-            log.error("Exception in publishingRecoverer : {} ", e.getMessage(), e);
-            if (e.getCause() instanceof RecoverableDataAccessException) {
-                return new TopicPartition(retryTopic, r.partition());
-            } else {
-                return new TopicPartition(deadLetterTopic, r.partition());
-            }
-        }
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate,
+                (r, e) -> {
+                    log.error("Exception in publishingRecoverer : {} ", e.getMessage(), e);
+                    if (e.getCause() instanceof RecoverableDataAccessException) {
+                        return new TopicPartition(retryTopic, r.partition());
+                    } else {
+                        return new TopicPartition(deadLetterTopic, r.partition());
+                    }
+                }
         );
-
         return recoverer;
-
     }
 
     public DefaultErrorHandler errorHandler() {
-        var exceptionsToIgnoreList = List.of(
-                IllegalArgumentException.class
-        );
-        var exceptionsToRetryList = List.of(
-                RecoverableDataAccessException.class
-        );
-        var fixedBackOff = new FixedBackOff(1000L, 2L);
-        var expBackOff = new ExponentialBackOffWithMaxRetries(2);
-        expBackOff.setInitialInterval(1000l);
-        expBackOff.setMultiplier(2.0);
-        expBackOff.setMaxInterval(2000l);
+
+        List<Class<IllegalArgumentException>> exceptionsToIgnoreList = List.of(IllegalArgumentException.class);
+        List<Class<RecoverableDataAccessException>> exceptionsToRetryList = List.of(RecoverableDataAccessException.class);
+
+        FixedBackOff fixedBackOff = new FixedBackOff(1000L, 2L);
+
+        ExponentialBackOffWithMaxRetries exponentialBackOff = new ExponentialBackOffWithMaxRetries(2);
+        exponentialBackOff.setInitialInterval(1_000L);
+        exponentialBackOff.setMultiplier(2D);
+        exponentialBackOff.setMaxInterval(2_000L);
+
         var errorHandler = new DefaultErrorHandler(
                 publishingRecoverer(),
-                fixedBackOff
-                //expBackOff
+                //fixedBackOff
+                exponentialBackOff
         );
-        exceptionsToIgnoreList.forEach(errorHandler::addNotRetryableExceptions);
-        //exceptionsToRetryList.forEach(errorHandler::addRetryableExceptions);
-        errorHandler.setRetryListeners((record, ex, deliveryAttempt) -> {
-            log.info("Failed Record in Retry Listener, Exception : {}, deliveryAttempt : {}",
-                    ex.getMessage(), deliveryAttempt);
 
-        });
+        errorHandler.setRetryListeners(((record, ex, deliveryAttempt) -> {
+            log.info("Failed record in retry listener, Exception : {} , deliverAttempt : {} ",
+                    ex.getMessage(),
+                    deliveryAttempt);
+        }));
+        errorHandler.addNotRetryableExceptions();
+        // to ignore...
+        //exceptionsToIgnoreList.forEach(errorHandler::addNotRetryableExceptions);
+        // or retry, the choice is yours
+        exceptionsToRetryList.forEach(errorHandler::addRetryableExceptions);
+
         return errorHandler;
     }
 
@@ -111,7 +113,7 @@ public class LibraryEventsConsumerConfig {
         configurer.configure(factory, kafkaConsumerFactory
                 .getIfAvailable(() -> new DefaultKafkaConsumerFactory<>(this.properties.buildConsumerProperties())));
         //kafkaContainerCustomizer.ifAvailable(factory::setContainerCustomizer);
-        //factory.setConcurrency(3);
+        factory.setConcurrency(3);
         factory.setCommonErrorHandler(errorHandler());
         return factory;
     }
