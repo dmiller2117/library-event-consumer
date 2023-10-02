@@ -83,9 +83,9 @@ public class LibraryEventsConsumerConfig {
         }));
         errorHandler.addNotRetryableExceptions();
         // to ignore...
-        //exceptionsToIgnoreList.forEach(errorHandler::addNotRetryableExceptions);
+        exceptionsToIgnoreList.forEach(errorHandler::addNotRetryableExceptions);
         // or retry, the choice is yours
-        exceptionsToRetryList.forEach(errorHandler::addRetryableExceptions);
+        //exceptionsToRetryList.forEach(errorHandler::addRetryableExceptions);
 
         return errorHandler;
     }
@@ -96,10 +96,8 @@ public class LibraryEventsConsumerConfig {
             log.info("Inside the recoverable logic");
             //Add any Recovery Code here.
             //failureService.saveFailedRecord((ConsumerRecord<Integer, String>) record, exception, RETRY);
-
         } else {
             log.info("Inside the non recoverable logic and skipping the record : {}", record);
-
         }
     };
 
