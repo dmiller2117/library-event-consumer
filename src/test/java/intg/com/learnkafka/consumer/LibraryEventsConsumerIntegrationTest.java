@@ -69,6 +69,8 @@ class LibraryEventsConsumerIntegrationTest {
     @Value("${topics.retry:library-events.RETRY}")
     private String retryTopic;
 
+    @Value("${topics.dlt:library-events.DLT}")
+    private String deadLetterTopic;
 
     @BeforeEach
     void setUp() {
@@ -146,12 +148,20 @@ class LibraryEventsConsumerIntegrationTest {
         kafkaTemplate.sendDefault(json).get();
 
         CountDownLatch latch = new CountDownLatch(1);
-        latch.await(5, TimeUnit.SECONDS);
+        latch.await(3, TimeUnit.SECONDS);
 
         verify(libraryEventsConsumerSpy, times(1)).onMessage(isA(ConsumerRecord.class));
         verify(libraryEventsServiceSpy, times(1)).processLibraryEvent(isA(ConsumerRecord.class));
         verifyNoMoreInteractions(libraryEventsConsumerSpy);
         verifyNoMoreInteractions(libraryEventsServiceSpy);
+
+        var configs = new HashMap<>(KafkaTestUtils.consumerProps("group2", "true", embeddedKafkaBroker));
+        Consumer<Integer, String> consumer = new DefaultKafkaConsumerFactory<>(configs, new IntegerDeserializer(), new StringDeserializer()).createConsumer();
+        embeddedKafkaBroker.consumeFromEmbeddedTopics(consumer, deadLetterTopic);
+
+        ConsumerRecord<Integer, String> consumerRecord = KafkaTestUtils.getSingleRecord(consumer, deadLetterTopic);
+        assertEquals(json, consumerRecord.value());
+
 
     }
 
