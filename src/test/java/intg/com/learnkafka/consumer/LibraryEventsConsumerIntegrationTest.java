@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learnkafka.entity.Book;
 import com.learnkafka.entity.LibraryEvent;
 import com.learnkafka.entity.LibraryEventType;
+import com.learnkafka.entity.enums.Status;
+import com.learnkafka.jpa.FailureRecordRepository;
 import com.learnkafka.jpa.LibraryEventsRepository;
 import com.learnkafka.service.LibraryEventsService;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -66,6 +68,8 @@ class LibraryEventsConsumerIntegrationTest {
     LibraryEventsRepository libraryEventsRepository;
     @Autowired
     ObjectMapper objectMapper;
+    @Autowired
+    private FailureRecordRepository failureRecordRepository;
     @Value("${topics.retry:library-events.RETRY}")
     private String retryTopic;
 
@@ -162,6 +166,29 @@ class LibraryEventsConsumerIntegrationTest {
         ConsumerRecord<Integer, String> consumerRecord = KafkaTestUtils.getSingleRecord(consumer, deadLetterTopic);
         assertEquals(json, consumerRecord.value());
 
+    }
+
+    @Test
+    void publishUpdateLibraryEvent_null_LibraryEvent_failure_record() throws JsonProcessingException, ExecutionException, InterruptedException {
+
+        String json = "{\"libraryEventId\":null,\"libraryEventType\": \"UPDATE\",\"book\":{\"bookId\":456,\"bookName\":\"Kafka Using Spring Boot\",\"bookAuthor\":\"Dilip\"}}";
+        kafkaTemplate.sendDefault(json).get();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        latch.await(3, TimeUnit.SECONDS);
+
+        verify(libraryEventsConsumerSpy, times(1)).onMessage(isA(ConsumerRecord.class));
+        verify(libraryEventsServiceSpy, times(1)).processLibraryEvent(isA(ConsumerRecord.class));
+        verifyNoMoreInteractions(libraryEventsConsumerSpy);
+        verifyNoMoreInteractions(libraryEventsServiceSpy);
+
+        assertEquals(1, failureRecordRepository.count());
+        failureRecordRepository.findAll().forEach(
+                failureRecord -> {
+                    System.out.println("failure record :: " + failureRecord);
+                    assertEquals(Status.DEAD, failureRecord.getStatus());
+                }
+        );
 
     }
 

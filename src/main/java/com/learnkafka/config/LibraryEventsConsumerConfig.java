@@ -1,6 +1,9 @@
 package com.learnkafka.config;
 
+import com.learnkafka.entity.enums.Status;
+import com.learnkafka.service.FailureService;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,26 +29,33 @@ import org.springframework.util.backoff.FixedBackOff;
 import java.util.List;
 
 @Configuration
-@EnableKafka //:: needed on older versions, fyi only.
+@EnableKafka // needed on older versions, fyi only.
 @Slf4j
 public class LibraryEventsConsumerConfig {
 
+    private final String retryTopic;
+    private final String deadLetterTopic;
     private final KafkaProperties properties;
+    private final KafkaTemplate<Integer, String> kafkaTemplate;
+    private FailureService failureService;
+
     @Autowired
-    KafkaTemplate kafkaTemplate;
-
-    @Value("${topics.retry:library-events.RETRY}")
-    private String retryTopic;
-
-    @Value("${topics.dlt:library-events.DLT}")
-    private String deadLetterTopic;
-
-    public LibraryEventsConsumerConfig(KafkaProperties properties) {
+    public LibraryEventsConsumerConfig(
+            KafkaTemplate<Integer, String> kafkaTemplate,
+            @Value("${topics.retry:library-events.RETRY}") String retryTopic,
+            @Value("${topics.dlt:library-events.DLT}") String deadLetterTopic,
+            KafkaProperties properties,
+            FailureService failureService) {
+        this.kafkaTemplate = kafkaTemplate;
+        this.retryTopic = retryTopic;
+        this.deadLetterTopic = deadLetterTopic;
         this.properties = properties;
+        this.failureService = failureService;
     }
 
+
     public DeadLetterPublishingRecoverer publishingRecoverer() {
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate,
+        return new DeadLetterPublishingRecoverer(kafkaTemplate,
                 (r, e) -> {
                     log.error("Exception in publishingRecoverer : {} ", e.getMessage(), e);
                     if (e.getCause() instanceof RecoverableDataAccessException) {
@@ -55,8 +65,21 @@ public class LibraryEventsConsumerConfig {
                     }
                 }
         );
-        return recoverer;
     }
+
+    ConsumerRecordRecoverer consumerRecordRecoverer = (consumerRecord, e) -> {
+        log.error("Exception in publishingRecoverer : {} ", e.getMessage(), e);
+        var record = (ConsumerRecord<Integer, String>) consumerRecord;
+        if (e.getCause() instanceof RecoverableDataAccessException) {
+            // recovery logic
+            log.info("Inside recovery");
+            failureService.saveFailedRecord(record, e, Status.RETRY);
+        } else {
+            // non recovery logic
+            log.info("Inside non recovery");
+            failureService.saveFailedRecord(record, e, Status.DEAD);
+        }
+    };
 
     public DefaultErrorHandler errorHandler() {
 
@@ -71,7 +94,8 @@ public class LibraryEventsConsumerConfig {
         exponentialBackOff.setMaxInterval(2_000L);
 
         var errorHandler = new DefaultErrorHandler(
-                publishingRecoverer(),
+                consumerRecordRecoverer,
+                //publishingRecoverer(),
                 //fixedBackOff
                 exponentialBackOff
         );
@@ -89,17 +113,6 @@ public class LibraryEventsConsumerConfig {
 
         return errorHandler;
     }
-
-    ConsumerRecordRecoverer consumerRecordRecoverer = (record, exception) -> {
-        log.error("Exception is : {} Failed Record : {} ", exception, record);
-        if (exception.getCause() instanceof RecoverableDataAccessException) {
-            log.info("Inside the recoverable logic");
-            //Add any Recovery Code here.
-            //failureService.saveFailedRecord((ConsumerRecord<Integer, String>) record, exception, RETRY);
-        } else {
-            log.info("Inside the non recoverable logic and skipping the record : {}", record);
-        }
-    };
 
     @Bean
         //@ConditionalOnMissingBean(name = "kafkaListenerContainerFactory")
