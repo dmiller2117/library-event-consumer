@@ -27,6 +27,7 @@ public class FailureService {
                 .offset_value(consumerRecord.offset())
                 .exception(e.getCause().getMessage())
                 .status(status)
+                .errorRecord(consumerRecord.value())
                 .build());
     }
 }
