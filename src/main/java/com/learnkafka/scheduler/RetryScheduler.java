@@ -25,7 +25,7 @@ public class RetryScheduler {
 
     @Scheduled(fixedRate = 10000)
     public void retryFailedRecords() {
-        log.info("Retry failed records started");
+        // log.info("Retry failed records started");
         failureRecordRepository.findAllByStatus(Status.RETRY).forEach(failureRecord -> {
                     var consumerRecord = buildConsumerRecord(failureRecord);
                     try {
@@ -37,7 +37,7 @@ public class RetryScheduler {
                     }
                 }
         );
-        log.info("Retry failed records complete");
+        // log.info("Retry failed records complete");
     }
 
     private ConsumerRecord<Integer, String> buildConsumerRecord(FailureRecord failureRecord) {
